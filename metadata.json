@@ -1,0 +1,5 @@
+{
+  "name": "PantryPal",
+  "description": "Smart recipe suggestions based on what's currently in your pantry. Using Gemini AI to find creative meals with minimal ingredients.",
+  "requestFramePermissions": []
+}
