@@ -100,7 +100,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // CLEAR FIRST: Explicitly reset the recipes state
     setRecipes([]);
     setLoading(true);
     setError(null);
@@ -112,9 +111,8 @@ const App: React.FC = () => {
       const results = await getRecipesFromPantry(ingredientList, applianceList, servings);
       setRecipes(results);
       
-      // Focus on results immediately after they are set
       setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
       }, 100);
       
     } catch (err) {
@@ -130,16 +128,49 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 pb-20">
       <header className="bg-white border-b border-slate-100 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-orange-500 p-2 rounded-xl text-white">
-              <ChefHat size={24} />
+          <div className="flex items-center gap-6 sm:gap-12">
+            <div className="flex items-center gap-2">
+              <div className="bg-orange-500 p-2 rounded-xl text-white">
+                <ChefHat size={24} />
+              </div>
+              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent hidden xs:block">
+                PantryPal
+              </h1>
             </div>
-            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
-              PantryPal
-            </h1>
+
+            <nav className="flex items-center bg-slate-100 p-1 rounded-xl">
+              <button
+                onClick={() => setActiveTab('suggestions')}
+                className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-all ${
+                  activeTab === 'suggestions' 
+                    ? 'bg-white text-orange-600 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Suggestions
+              </button>
+              <button
+                onClick={() => setActiveTab('saved')}
+                className={`px-4 py-1.5 text-sm font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                  activeTab === 'saved' 
+                    ? 'bg-white text-orange-600 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Saved
+                {savedRecipes.length > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    activeTab === 'saved' ? 'bg-orange-500 text-white' : 'bg-slate-300 text-slate-600'
+                  }`}>
+                    {savedRecipes.length}
+                  </span>
+                )}
+              </button>
+            </nav>
           </div>
-          <div className="hidden sm:block text-sm font-medium text-slate-500">
-            Smart Meal Finder
+          <div className="hidden lg:flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
+            <Sparkles size={14} className="text-orange-400" />
+            AI Visuals Enabled
           </div>
         </div>
       </header>
@@ -159,7 +190,6 @@ const App: React.FC = () => {
               onRemove={removePantryItem} 
             />
 
-            {/* Servings Selector */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
@@ -200,43 +230,10 @@ const App: React.FC = () => {
                 {loading ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
                 Generate Recipes
               </button>
-              {pantryItems.length === 0 && (
-                <p className="text-center text-xs text-slate-400 mt-3 italic">
-                  Add ingredients to start cooking
-                </p>
-              )}
             </div>
           </div>
 
           <div className="lg:col-span-8" ref={resultsRef}>
-            <div className="mb-6">
-              <div className="flex items-center gap-4 border-b border-slate-200">
-                <button
-                  onClick={() => setActiveTab('suggestions')}
-                  className={`pb-3 px-2 text-sm font-bold transition-all relative ${
-                    activeTab === 'suggestions' ? 'text-orange-600' : 'text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  Suggestions
-                  {activeTab === 'suggestions' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />}
-                </button>
-                <button
-                  onClick={() => setActiveTab('saved')}
-                  className={`pb-3 px-2 text-sm font-bold transition-all relative flex items-center gap-1.5 ${
-                    activeTab === 'saved' ? 'text-orange-600' : 'text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  Saved Recipes
-                  {savedRecipes.length > 0 && (
-                    <span className="bg-orange-100 text-orange-600 text-[10px] px-1.5 py-0.5 rounded-full">
-                      {savedRecipes.length}
-                    </span>
-                  )}
-                  {activeTab === 'saved' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />}
-                </button>
-              </div>
-            </div>
-
             {loading ? (
               <div className="flex flex-col items-center justify-center py-32 text-slate-400">
                 <div className="relative mb-8">
@@ -265,7 +262,8 @@ const App: React.FC = () => {
             ) : displayedRecipes.length > 0 ? (
               <div className="grid grid-cols-1 gap-6 pb-12">
                 {activeTab === 'suggestions' && recipes.length > 0 && !loading && (
-                  <div className="flex justify-end mb-2">
+                  <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-lg font-bold text-slate-800">Chef's Suggestions</h2>
                     <button 
                       onClick={handleSearch}
                       className="text-sm font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 transition-colors"
@@ -300,14 +298,6 @@ const App: React.FC = () => {
                     ? 'Start by adding ingredients and selecting your appliances. We\'ll find recipes that fit your kitchen perfectly.'
                     : 'Recipes you save while browsing suggestions will appear here for easy access later.'}
                 </p>
-                {activeTab === 'saved' && (
-                  <button 
-                    onClick={() => setActiveTab('suggestions')}
-                    className="mt-6 text-sm font-bold text-orange-600 hover:underline"
-                  >
-                    Go to Suggestions
-                  </button>
-                )}
               </div>
             )}
           </div>

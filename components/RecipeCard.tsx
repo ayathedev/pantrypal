@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Clock, ChefHat, ChevronDown, ChevronUp, CheckCircle2, Bookmark, BookmarkCheck, Share2, X, Maximize2, Flame, Brain, Wheat, Droplets, Users } from 'lucide-react';
+import { Clock, ChefHat, ChevronDown, ChevronUp, CheckCircle2, Bookmark, BookmarkCheck, Share2, X, Maximize2, Flame, Brain, Wheat, Droplets, Users, Search, ExternalLink, Lightbulb, Sparkles } from 'lucide-react';
 import { Recipe } from '../types';
+import { generateImageFromTitle } from '../services/geminiService';
 
 interface RecipeCardProps {
   recipe: Recipe;
@@ -11,14 +12,31 @@ interface RecipeCardProps {
 
 const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved = false, onToggleSave }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showNutrition, setShowNutrition] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  
-  // Create a search-friendly string for the image placeholder
-  const imageSearchTerms = encodeURIComponent(recipe.name.toLowerCase().replace(/\s+/g, ',') + ',food,cooking');
-  const imageUrl = `https://loremflickr.com/800/400/${imageSearchTerms}`;
-  const largeImageUrl = `https://loremflickr.com/1200/800/${imageSearchTerms}`;
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  // Handle Escape key to close modal
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAiImage = async () => {
+      setIsGenerating(true);
+      const url = await generateImageFromTitle(recipe.name);
+      if (isMounted && url) {
+        setGeneratedImageUrl(url);
+      }
+      if (isMounted) setIsGenerating(false);
+    };
+
+    fetchAiImage();
+    return () => { isMounted = false; };
+  }, [recipe.name]);
+
+  // Fallback if AI generation fails
+  const fallbackUrl = `https://loremflickr.com/800/450/food,${recipe.name.replace(/\s+/g, ',')}`;
+  const displayUrl = generatedImageUrl || fallbackUrl;
+
   useEffect(() => {
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setIsImageModalOpen(false);
@@ -47,24 +65,55 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved = false, onTogg
     }
   };
 
+  const openGoogleImages = () => {
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(recipe.name)}+recipe&tbm=isch`;
+    window.open(searchUrl, '_blank');
+  };
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow group">
-      {/* Recipe Image Placeholder */}
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:-translate-y-1.5 hover:scale-[1.01] transition-all duration-500 ease-out group animate-card-entry">
+      {/* Recipe Image Display */}
       <div 
-        className="h-48 w-full overflow-hidden bg-slate-100 relative cursor-zoom-in group/image"
+        className="h-64 w-full overflow-hidden bg-slate-100 relative cursor-zoom-in group/image"
         onClick={() => setIsImageModalOpen(true)}
       >
+        {(!imageLoaded || isGenerating) && (
+          <div className="absolute inset-0 bg-slate-200 animate-pulse flex flex-col items-center justify-center gap-3">
+             <div className="w-12 h-12 bg-slate-300/50 rounded-full flex items-center justify-center">
+                <Sparkles className="text-orange-400 animate-pulse" size={24} />
+             </div>
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+               AI is painting your {recipe.name.split(' ').pop()}...
+             </p>
+          </div>
+        )}
+        
         <img 
-          src={imageUrl}
+          src={displayUrl}
           alt={recipe.name}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+          onLoad={() => setImageLoaded(true)}
+          className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-105 ${
+            imageLoaded && !isGenerating ? 'opacity-100 blur-0' : 'opacity-0 blur-lg'
+          }`}
           loading="lazy"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <div className="bg-white/20 backdrop-blur-md p-2 rounded-full text-white">
-            <Maximize2 size={24} />
+        
+        {imageLoaded && !isGenerating && (
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="bg-white/20 backdrop-blur-md p-2 rounded-full text-white">
+              <Maximize2 size={24} />
+            </div>
           </div>
-        </div>
+        )}
+
+        {generatedImageUrl && (
+          <div className="absolute top-4 left-4 flex items-center gap-2">
+            <div className="bg-black/50 backdrop-blur-md text-white text-[9px] font-black px-2 py-1 rounded-md uppercase tracking-widest shadow-lg flex items-center gap-1">
+              <Sparkles size={10} /> AI Generated
+            </div>
+          </div>
+        )}
+
         <div className="absolute bottom-3 right-3 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wider">
           Click to enlarge
         </div>
@@ -85,13 +134,14 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved = false, onTogg
           
           <div className="relative max-w-5xl w-full max-h-[90vh] flex items-center justify-center animate-in zoom-in-95 duration-300">
             <img 
-              src={largeImageUrl} 
+              src={displayUrl} 
               alt={recipe.name}
               className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
             <div className="absolute -bottom-10 left-0 right-0 text-center">
               <h3 className="text-white font-bold text-lg">{recipe.name}</h3>
+              <p className="text-white/60 text-xs">Generated by Gemini 2.5 Flash Image</p>
             </div>
           </div>
         </div>
@@ -143,13 +193,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved = false, onTogg
             </div>
           </div>
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic select-none">
-            Source: AI Generated
+            {generatedImageUrl ? "AI Painting" : "Photo Source"}
           </span>
         </div>
 
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full py-2.5 flex items-center justify-center gap-2 text-slate-700 font-bold border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+          className="w-full py-2.5 flex items-center justify-center gap-2 text-slate-700 font-bold border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
         >
           {isOpen ? (
             <>Hide Details <ChevronUp size={18} /></>
@@ -165,36 +215,48 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved = false, onTogg
           {/* Nutrition Section */}
           {recipe.nutrition && (
             <div className="mb-8">
-              <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-base">
-                <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span>
-                Nutritional Estimates <span className="text-[10px] text-slate-400 font-normal uppercase tracking-wider ml-2">(Per Serving)</span>
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
-                  <Flame size={16} className="text-orange-500 mb-1" />
-                  <span className="text-lg font-bold text-slate-800 leading-none">{recipe.nutrition.calories}</span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">Calories</span>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
-                  <Brain size={16} className="text-blue-500 mb-1" />
-                  <span className="text-lg font-bold text-slate-800 leading-none">{recipe.nutrition.protein}</span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">Protein</span>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
-                  <Wheat size={16} className="text-amber-500 mb-1" />
-                  <span className="text-lg font-bold text-slate-800 leading-none">{recipe.nutrition.carbs}</span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">Carbs</span>
-                </div>
-                <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
-                  <Droplets size={16} className="text-rose-500 mb-1" />
-                  <span className="text-lg font-bold text-slate-800 leading-none">{recipe.nutrition.fat}</span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">Fat</span>
-                </div>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-bold text-slate-800 flex items-center gap-2 text-base">
+                  <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span>
+                  Nutritional Estimates <span className="text-[10px] text-slate-400 font-normal uppercase tracking-wider ml-2">(Per Serving)</span>
+                </h4>
+                <button
+                  onClick={() => setShowNutrition(!showNutrition)}
+                  className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-100 uppercase tracking-widest transition-all active:scale-95"
+                >
+                  {showNutrition ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  {showNutrition ? 'Hide' : 'Show'}
+                </button>
               </div>
+
+              {showNutrition && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                    <Flame size={16} className="text-orange-500 mb-1" />
+                    <span className="text-lg font-bold text-slate-800 leading-none">{recipe.nutrition.calories}</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">Calories</span>
+                  </div>
+                  <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                    <Brain size={16} className="text-blue-500 mb-1" />
+                    <span className="text-lg font-bold text-slate-800 leading-none">{recipe.nutrition.protein}</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">Protein</span>
+                  </div>
+                  <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                    <Wheat size={16} className="text-amber-500 mb-1" />
+                    <span className="text-lg font-bold text-slate-800 leading-none">{recipe.nutrition.carbs}</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">Carbs</span>
+                  </div>
+                  <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
+                    <Droplets size={16} className="text-rose-500 mb-1" />
+                    <span className="text-lg font-bold text-slate-800 leading-none">{recipe.nutrition.fat}</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-1">Fat</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="mb-8">
+          <div className="mb-10">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-slate-800 flex items-center gap-2 text-base">
                 <span className="w-1.5 h-6 bg-orange-500 rounded-full"></span>
@@ -202,10 +264,10 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved = false, onTogg
               </h4>
               <div className="flex gap-4 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 <span className="flex items-center gap-1.5">
-                  <Users size={14} className="text-slate-300" /> Servings: {recipe.servings || 4}
+                  <Users size={14} className="text-slate-300" /> {recipe.servings || 2} Servings
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <Clock size={14} className="text-slate-300" /> Total Time: {recipe.totalTime || '45 mins'}
+                  <Clock size={14} className="text-slate-300" /> {recipe.totalTime}
                 </span>
               </div>
             </div>
@@ -220,37 +282,92 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved = false, onTogg
           </div>
 
           <div>
-            <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-base">
-              <span className="w-1.5 h-6 bg-orange-500 rounded-full"></span>
-              Step-by-Step Instructions
-            </h4>
-            <div className="space-y-3">
+            <div className="flex items-center justify-between mb-6">
+              <h4 className="font-bold text-slate-800 flex items-center gap-2 text-base">
+                <span className="w-1.5 h-6 bg-orange-500 rounded-full"></span>
+                Step-by-Step Instructions
+              </h4>
+              <button 
+                onClick={openGoogleImages}
+                className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-orange-600 uppercase tracking-widest transition-colors"
+              >
+                <Search size={12} /> Google Images <ExternalLink size={10} />
+              </button>
+            </div>
+            <div className="space-y-4 mb-10">
               {recipe.instructions.map((step, idx) => (
                 <div 
                   key={idx} 
-                  className={`p-4 rounded-2xl border flex gap-4 transition-all ${
-                    idx % 2 === 0 
-                      ? 'bg-white border-slate-200 shadow-sm' 
-                      : 'bg-orange-50/40 border-orange-100'
+                  className={`pt-6 pb-8 px-4 -mx-4 rounded-2xl flex gap-6 relative group/step transition-all duration-300 hover:bg-orange-50/50 ${
+                    idx !== recipe.instructions.length - 1 ? 'border-b border-slate-100/80 border-dashed' : ''
                   }`}
                 >
-                  <div className="flex-shrink-0">
-                    <span className="w-8 h-8 flex items-center justify-center bg-slate-900 text-white rounded-full text-xs font-bold shadow-md">
-                      {idx + 1}
-                    </span>
+                  <div className="flex-shrink-0 flex items-start">
+                    <div className="relative flex items-center justify-center transition-transform duration-300 group-hover/step:scale-110">
+                      <div className="absolute inset-0 bg-orange-100 rounded-lg rotate-6 translate-x-0.5 translate-y-0.5 group-hover/step:rotate-0 group-hover/step:translate-x-0 group-hover/step:translate-y-0 transition-all duration-300"></div>
+                      <span className="relative w-9 h-9 flex items-center justify-center bg-orange-500 text-white rounded-lg text-sm font-black shadow-sm group-hover/step:shadow-md transition-shadow">
+                        {idx + 1}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-700 leading-relaxed font-medium pt-1">
-                    {step}
-                  </p>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-700 leading-[1.8] font-medium pt-1 flex items-start">
+                      <span className="mr-2 text-orange-400 font-bold select-none opacity-70" aria-hidden="true">—</span>
+                      <span>{step}</span>
+                    </p>
+                  </div>
+                  <span className="absolute -right-2 -bottom-4 text-7xl font-black text-slate-900/[0.02] select-none pointer-events-none group-hover/step:text-orange-500/[0.06] transition-colors duration-300">
+                    {idx + 1}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Chef's Tips & Techniques */}
+          {recipe.tips && recipe.tips.length > 0 && (
+            <div className="bg-amber-50/50 rounded-3xl p-6 border border-amber-100 relative overflow-hidden group/tips">
+              <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover/tips:opacity-[0.05] transition-opacity">
+                <Lightbulb size={120} className="text-amber-900" />
+              </div>
+              <h4 className="font-bold text-amber-900 mb-4 flex items-center gap-2 text-base relative z-10">
+                <Lightbulb size={18} className="text-amber-600" />
+                Chef's Tips & Techniques
+              </h4>
+              <ul className="space-y-3 relative z-10">
+                {recipe.tips.map((tip, idx) => (
+                  <li key={idx} className="flex gap-3 text-sm text-amber-900/80 leading-relaxed">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0"></span>
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           
-          <div className="mt-8 flex items-center justify-center py-4 border-t border-slate-200 border-dashed">
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
-              Enjoy your {recipe.name}!
+          <div className="mt-10 flex flex-col items-center justify-center py-6 border-t border-slate-200 border-dashed text-center">
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-4">
+              Bon Appétit!
             </p>
+            <div className="flex gap-4">
+               <button 
+                 onClick={handleShare}
+                 className="px-6 py-2 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2"
+               >
+                 <Share2 size={14} /> Share Recipe
+               </button>
+               <button 
+                 onClick={() => onToggleSave?.(recipe)}
+                 className={`px-6 py-2 rounded-full text-xs font-bold shadow-sm flex items-center gap-2 transition-colors ${
+                   isSaved 
+                    ? 'bg-orange-50 text-orange-600 border border-orange-200' 
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                 }`}
+               >
+                 {isSaved ? <BookmarkCheck size={14} /> : <Bookmark size={14} />} 
+                 {isSaved ? 'Saved to Book' : 'Save for Later'}
+               </button>
+            </div>
           </div>
         </div>
       )}
