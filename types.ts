@@ -6,7 +6,15 @@ export interface Recipe {
   ingredients: string[];
   instructions: string[];
   prepTime: string;
+  totalTime: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
+  servings: number;
+  nutrition?: {
+    calories: string;
+    protein: string;
+    carbs: string;
+    fat: string;
+  };
 }
 
 export interface PantryItem {

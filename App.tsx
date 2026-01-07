@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { ChefHat, Sparkles, Loader2, AlertCircle, ShoppingBasket } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChefHat, Sparkles, Loader2, AlertCircle, ShoppingBasket, Bookmark, Users, Minus, Plus } from 'lucide-react';
 import PantryManager from './components/PantryManager';
 import RecipeCard from './components/RecipeCard';
 import ApplianceSelector from './components/ApplianceSelector';
@@ -19,18 +19,33 @@ const DEFAULT_APPLIANCES: Appliance[] = [
 const App: React.FC = () => {
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
   const [appliances, setAppliances] = useState<Appliance[]>(DEFAULT_APPLIANCES);
+  const [servings, setServings] = useState(2);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
+  const [activeTab, setActiveTab] = useState<'suggestions' | 'saved'>('suggestions');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Ref for scrolling to results
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const savedItems = localStorage.getItem('pantry-pal-items');
     const savedApps = localStorage.getItem('pantry-pal-apps');
+    const persistedSavedRecipes = localStorage.getItem('pantry-pal-saved-recipes');
+    const savedServings = localStorage.getItem('pantry-pal-servings');
+    
     if (savedItems) {
       try { setPantryItems(JSON.parse(savedItems)); } catch (e) {}
     }
     if (savedApps) {
       try { setAppliances(JSON.parse(savedApps)); } catch (e) {}
+    }
+    if (persistedSavedRecipes) {
+      try { setSavedRecipes(JSON.parse(persistedSavedRecipes)); } catch (e) {}
+    }
+    if (savedServings) {
+      setServings(parseInt(savedServings) || 2);
     }
   }, []);
 
@@ -41,6 +56,14 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('pantry-pal-apps', JSON.stringify(appliances));
   }, [appliances]);
+
+  useEffect(() => {
+    localStorage.setItem('pantry-pal-saved-recipes', JSON.stringify(savedRecipes));
+  }, [savedRecipes]);
+
+  useEffect(() => {
+    localStorage.setItem('pantry-pal-servings', servings.toString());
+  }, [servings]);
 
   const addPantryItem = (name: string) => {
     const newItem: PantryItem = {
@@ -60,25 +83,48 @@ const App: React.FC = () => {
     ));
   };
 
+  const toggleSaveRecipe = (recipe: Recipe) => {
+    setSavedRecipes(prev => {
+      const isAlreadySaved = prev.some(r => r.id === recipe.id);
+      if (isAlreadySaved) {
+        return prev.filter(r => r.id !== recipe.id);
+      } else {
+        return [...prev, recipe];
+      }
+    });
+  };
+
   const handleSearch = async () => {
     if (pantryItems.length === 0) {
       setError("Please add at least one ingredient to your pantry.");
       return;
     }
 
+    // CLEAR FIRST: Explicitly reset the recipes state
+    setRecipes([]);
     setLoading(true);
     setError(null);
+    setActiveTab('suggestions');
+
     try {
       const ingredientList = pantryItems.map(i => i.name);
       const applianceList = appliances.filter(a => a.enabled).map(a => a.name);
-      const results = await getRecipesFromPantry(ingredientList, applianceList);
+      const results = await getRecipesFromPantry(ingredientList, applianceList, servings);
       setRecipes(results);
+      
+      // Focus on results immediately after they are set
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+      
     } catch (err) {
       setError("Failed to fetch recipes. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
   };
+
+  const displayedRecipes = activeTab === 'suggestions' ? recipes : savedRecipes;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 pb-20">
@@ -113,6 +159,38 @@ const App: React.FC = () => {
               onRemove={removePantryItem} 
             />
 
+            {/* Servings Selector */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
+                  <Users size={20} />
+                </div>
+                <h2 className="text-lg font-bold text-slate-800">Serving Size</h2>
+              </div>
+              <div className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-200">
+                <button 
+                  onClick={() => setServings(Math.max(1, servings - 1))}
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  disabled={servings <= 1}
+                >
+                  <Minus size={18} />
+                </button>
+                <div className="text-center">
+                  <span className="text-xl font-bold text-slate-800">{servings}</span>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mt-1">
+                    {servings === 1 ? 'Person' : 'People'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setServings(Math.min(10, servings + 1))}
+                  className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  disabled={servings >= 10}
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+            </div>
+
             <div className="pt-2">
               <button 
                 onClick={handleSearch}
@@ -130,19 +208,33 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="lg:col-span-8">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-800">
-                {recipes.length > 0 ? 'Suggested Meals' : 'Search Results'}
-              </h2>
-              {recipes.length > 0 && !loading && (
-                <button 
-                  onClick={handleSearch}
-                  className="text-sm font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1"
+          <div className="lg:col-span-8" ref={resultsRef}>
+            <div className="mb-6">
+              <div className="flex items-center gap-4 border-b border-slate-200">
+                <button
+                  onClick={() => setActiveTab('suggestions')}
+                  className={`pb-3 px-2 text-sm font-bold transition-all relative ${
+                    activeTab === 'suggestions' ? 'text-orange-600' : 'text-slate-400 hover:text-slate-600'
+                  }`}
                 >
-                  <Sparkles size={14} /> Refresh Ideas
+                  Suggestions
+                  {activeTab === 'suggestions' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />}
                 </button>
-              )}
+                <button
+                  onClick={() => setActiveTab('saved')}
+                  className={`pb-3 px-2 text-sm font-bold transition-all relative flex items-center gap-1.5 ${
+                    activeTab === 'saved' ? 'text-orange-600' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  Saved Recipes
+                  {savedRecipes.length > 0 && (
+                    <span className="bg-orange-100 text-orange-600 text-[10px] px-1.5 py-0.5 rounded-full">
+                      {savedRecipes.length}
+                    </span>
+                  )}
+                  {activeTab === 'saved' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />}
+                </button>
+              </div>
             </div>
 
             {loading ? (
@@ -155,7 +247,7 @@ const App: React.FC = () => {
                 </div>
                 <h3 className="text-slate-800 font-bold text-lg mb-2">Cooking up some ideas</h3>
                 <p className="text-sm text-center max-w-xs px-4 text-slate-500">
-                  Gemini is finding the best ways to use your pantry and appliances...
+                  Gemini is finding recipes for {servings} {servings === 1 ? 'person' : 'people'} using your ingredients...
                 </p>
               </div>
             ) : error ? (
@@ -170,21 +262,52 @@ const App: React.FC = () => {
                   Try Again
                 </button>
               </div>
-            ) : recipes.length > 0 ? (
+            ) : displayedRecipes.length > 0 ? (
               <div className="grid grid-cols-1 gap-6 pb-12">
-                {recipes.map((recipe) => (
-                  <RecipeCard key={recipe.id} recipe={recipe} />
+                {activeTab === 'suggestions' && recipes.length > 0 && !loading && (
+                  <div className="flex justify-end mb-2">
+                    <button 
+                      onClick={handleSearch}
+                      className="text-sm font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-100 transition-colors"
+                    >
+                      <Sparkles size={14} /> Refresh Ideas
+                    </button>
+                  </div>
+                )}
+                {displayedRecipes.map((recipe) => (
+                  <RecipeCard 
+                    key={recipe.id} 
+                    recipe={recipe} 
+                    onToggleSave={toggleSaveRecipe}
+                    isSaved={savedRecipes.some(r => r.id === recipe.id)}
+                  />
                 ))}
               </div>
             ) : (
               <div className="bg-white rounded-[2rem] border-2 border-dashed border-slate-200 p-16 text-center">
                 <div className="inline-block p-6 bg-slate-50 rounded-full mb-6">
-                  <ShoppingBasket size={48} className="text-slate-300" />
+                  {activeTab === 'suggestions' ? (
+                    <ShoppingBasket size={48} className="text-slate-300" />
+                  ) : (
+                    <Bookmark size={48} className="text-slate-300" />
+                  )}
                 </div>
-                <h3 className="text-xl font-bold text-slate-700 mb-3">Your Recipe Book is Empty</h3>
-                <p className="text-slate-500 max-w-sm mx-auto leading-relaxed">
-                  Start by adding ingredients and selecting your appliances. We'll find recipes that fit your kitchen perfectly.
+                <h3 className="text-xl font-bold text-slate-700 mb-3">
+                  {activeTab === 'suggestions' ? 'Your Recipe Book is Empty' : 'No Saved Recipes'}
+                </h3>
+                <p className="text-slate-500 max-w-sm mx-auto leading-relaxed text-sm">
+                  {activeTab === 'suggestions' 
+                    ? 'Start by adding ingredients and selecting your appliances. We\'ll find recipes that fit your kitchen perfectly.'
+                    : 'Recipes you save while browsing suggestions will appear here for easy access later.'}
                 </p>
+                {activeTab === 'saved' && (
+                  <button 
+                    onClick={() => setActiveTab('suggestions')}
+                    className="mt-6 text-sm font-bold text-orange-600 hover:underline"
+                  >
+                    Go to Suggestions
+                  </button>
+                )}
               </div>
             )}
           </div>
