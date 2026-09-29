@@ -57,22 +57,31 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, isSaved = false, onTogg
   }, []);
 
   const handleShare = async () => {
+    const shareUrl = window.location.href;
     const shareData = {
       title: `Recipe: ${recipe.name}`,
       text: `Check out this delicious recipe for ${recipe.name} I found on PantryPal!`,
-      url: window.location.href,
+      url: shareUrl,
     };
 
     try {
-      if (navigator.share) {
+      // Some environments use about:blank or other invalid URLs which cause navigator.share to throw
+      const isValidUrl = shareUrl && shareUrl.startsWith('http');
+      
+      if (navigator.share && isValidUrl) {
         await navigator.share(shareData);
       } else {
+        throw new Error('Web Share not supported or invalid URL');
+      }
+    } catch (err) {
+      // Fallback to clipboard if share fails or is unsupported
+      try {
         const shareText = `${shareData.text}\n\n${shareData.url}`;
         await navigator.clipboard.writeText(shareText);
         alert('Recipe link copied to clipboard!');
+      } catch (clipboardErr) {
+        console.error('Fallback sharing failed:', clipboardErr);
       }
-    } catch (err) {
-      console.error('Error sharing recipe:', err);
     }
   };
 
